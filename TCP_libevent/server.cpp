@@ -68,6 +68,7 @@ int getSocket()
     return fd;
 }
 
+// 运行在子线程中,对数据进行修改,然后通过socket写回到client端.
 void on_write(int sock, short event, void* arg)
 {
     cout << "on_write() called, sock = " << sock << endl;
@@ -87,6 +88,7 @@ void on_write(int sock, short event, void* arg)
     cout << "on_write() finished, sock = " << sock << endl;
 }
 
+// 运行在子线程中,从 socket 缓冲区中读取数据,读完数据之后,将一个"写事件"注册到"子线程的base"上,一旦 socket 可写,就调用on_write()函数
 void on_read(int sock, short event, void* arg)
 {
     cout << "on_read() called, sock = " << sock << endl;
@@ -95,7 +97,7 @@ void on_read(int sock, short event, void* arg)
 
     struct sock_ev* event_struct = (struct sock_ev*)arg; // 获取传进来的参数
     char* buffer = new char[BUF_SIZE];
-    memset(buffer, 0, sizeof(char) * BUF_SIZE);    // 求数组占空间的大小
+    memset(buffer, 0, sizeof(char) * BUF_SIZE );    // 求数组占空间的大小
 
     // 此处本来应该用while循环, 但由于使用了 libevent, 只在可以读的时候才触发on_write(), 故不必用while循环了
     int size = read(sock, buffer, BUF_SIZE);
@@ -145,7 +147,6 @@ void* process_in_new_thread_when_accepted(void* arg)
 }
 
 // 每当accept出一个新的socket_fd时，调用这个方法。创建一个新线程，在新线程里与client做交互
-
 void accept_new_thread(int sock){
     pthread_t thread;
     pthread_create(&thread,NULL,process_in_new_thread_when_accepted,(void*)sock);
@@ -154,10 +155,12 @@ void accept_new_thread(int sock){
 
 
 // 每当有新连接连到server时，就通过libevent调用此函数。每个连接对应一个新线程
+
 void on_accept(int sock, short event, void* arg)
 {
     struct sockaddr_in remote_addr;
     int sin_size=sizeof(struct sockaddr_in);
+    // 4.accept the requirement of some client
     int new_fd = accept(sock,  (struct sockaddr*) &remote_addr, (socklen_t*)&sin_size);
     if(new_fd < 0){
         cout<<"Accept error in on_accept()"<<endl;
@@ -171,21 +174,19 @@ void on_accept(int sock, short event, void* arg)
 
 int main()
 {
+    // 1. create a socket.
     int fd = getSocket();
     if(fd < 0)
         cout << "ERROR in main(), fd < 0" << endl;
 
     cout << "main() fd : " << fd << endl;
 
-    //为服务器猪线程绑定ip和port
-
+    // 2. bind the socket.
     struct sockaddr_in local_addr;  // 服务器网络端地址结构体
     memset(&local_addr, 0, sizeof(local_addr));
     local_addr.sin_family = AF_INET;  // 设置为IP通信
     local_addr.sin_addr.s_addr=inet_addr(SERVER_IP);//服务器IP地址
     local_addr.sin_port=htons(SERVER_PORT); //服务器端口号
-
-    // bind
     int bind_result = bind(fd, (struct sockaddr*)&local_addr, sizeof(sockaddr));
     if(bind_result < 0)
     {
@@ -194,7 +195,7 @@ int main()
     }
     cout << "bind result : " << bind_result << endl;
 
-    // listen
+    // 3. listen the socket
     listen(fd, 10);
 
     // 设置libevent事件,每当socket出现可读事件,就调用on_accept()
@@ -216,6 +217,17 @@ int main()
 }
 
 
+/**
+event_init ： 初始化libevent库。
+
+event_set ：赋值structevent结构。可以用event_add把该事件结构增加到事件循环，用event_del从事件循环中删除。支持的事件类型可以是下面组合：EV_READ（可读）,  EV_WRITE（可写），EV_PERSIST（除非调用event_del，否则事件一直在事件循环中）。
+
+event_base_set ：修改structevent事件结构所属的event_base为指定的event_base。Libevnet内置一个全局的event_base结构。多个线程应用中，如果多个线程都需要一个libevent事件循环，需要调用event_base_set修改事件结构基于的event_base。
+
+event_add ：增加事件到事件监控中。
+
+event_base_loop ：事件循环。调用底层的select、poll或epoll等，如监听事件发生，调用事件结构中指定的回调函数。
+*/
 
 
 
