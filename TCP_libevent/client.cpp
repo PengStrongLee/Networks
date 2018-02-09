@@ -13,7 +13,7 @@
 #include <event.h>
 
 using namespace std;
-/*
+
 #define BUF_SIZE 1024
 
 // connect to the server
@@ -131,4 +131,4 @@ int main()
     cout << "main finished ! " << endl;
     return 0;
 }
-*/
+
